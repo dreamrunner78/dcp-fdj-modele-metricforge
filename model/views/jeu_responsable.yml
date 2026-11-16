@@ -21,7 +21,7 @@ views:
         identifiant opaque souvent masqué, ne jamais tenter de le retrouver ni de le croiser ; les alertes sont en termes
         génériques. La part_decisions_restrictives_revues est un indicateur de contrôle et doit valoir 100 %. Les types
         d'alerte, décisions et délais n'existent que pour les joueurs ayant reçu une revue (champs vides sinon).
-      mf_history_months: 36
+      mf_history_months: 60
       mf_temoin: {measure: joueurs_suivis, time_dimension: date_fin_periode, date_range: last 12 months}
       mf_fraicheur: {measure: joueurs_suivis, time_dimension: date_fin_periode}
 

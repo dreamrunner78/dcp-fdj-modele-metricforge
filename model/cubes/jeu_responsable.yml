@@ -344,7 +344,7 @@ cubes:
           every: 10 minute
           sql: SELECT count(*) FROM jr_scores_periode
         build_range_start:
-          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+          sql: SELECT CAST(NOW() - interval '60' month AS TIMESTAMP)
         build_range_end:
           sql: SELECT CAST(NOW() AS TIMESTAMP)
 
@@ -357,7 +357,7 @@ cubes:
           every: 10 minute
           sql: SELECT count(*) FROM jr_scores_periode
         build_range_start:
-          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+          sql: SELECT CAST(NOW() - interval '60' month AS TIMESTAMP)
         build_range_end:
           sql: SELECT CAST(NOW() AS TIMESTAMP)
 
@@ -371,7 +371,7 @@ cubes:
           every: 10 minute
           sql: SELECT count(*) FROM jr_scores_periode
         build_range_start:
-          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+          sql: SELECT CAST(NOW() - interval '60' month AS TIMESTAMP)
         build_range_end:
           sql: SELECT CAST(NOW() AS TIMESTAMP)
 
@@ -385,7 +385,7 @@ cubes:
           every: 10 minute
           sql: SELECT count(*) FROM jr_scores_periode
         build_range_start:
-          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+          sql: SELECT CAST(NOW() - interval '60' month AS TIMESTAMP)
         build_range_end:
           sql: SELECT CAST(NOW() AS TIMESTAMP)
 
@@ -399,7 +399,7 @@ cubes:
           every: 10 minute
           sql: SELECT count(*) FROM jr_scores_periode
         build_range_start:
-          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+          sql: SELECT CAST(NOW() - interval '60' month AS TIMESTAMP)
         build_range_end:
           sql: SELECT CAST(NOW() AS TIMESTAMP)
 
@@ -413,7 +413,7 @@ cubes:
           every: 10 minute
           sql: SELECT count(*) FROM jr_scores_periode
         build_range_start:
-          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+          sql: SELECT CAST(NOW() - interval '60' month AS TIMESTAMP)
         build_range_end:
           sql: SELECT CAST(NOW() AS TIMESTAMP)
 
@@ -427,7 +427,7 @@ cubes:
           every: 10 minute
           sql: SELECT count(*) FROM jr_scores_periode
         build_range_start:
-          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+          sql: SELECT CAST(NOW() - interval '60' month AS TIMESTAMP)
         build_range_end:
           sql: SELECT CAST(NOW() AS TIMESTAMP)
 
@@ -529,6 +529,6 @@ cubes:
           every: 10 minute
           sql: SELECT count(*) FROM jr_activite_mensuelle
         build_range_start:
-          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+          sql: SELECT CAST(NOW() - interval '60' month AS TIMESTAMP)
         build_range_end:
           sql: SELECT CAST(NOW() AS TIMESTAMP)

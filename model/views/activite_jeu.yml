@@ -1,0 +1,22 @@
+views:
+  - name: activite_jeu
+    title: Activité de jeu et chaîne de calcul
+    description: >
+      Vue métier de la chaîne de calcul des joueurs sur des données SYNTHÉTIQUES (sans lien avec les chiffres réels de FDJ) :
+      dépôts par jour et répartition des joueurs par niveau d'intensité de jeu (vert, orange, rouge, bandes de démonstration
+      non réglementaires). Aucun identifiant de joueur : des comptages seulement.
+    meta:
+      ai_context: >
+        Données synthétiques : ne pas les présenter comme des chiffres de FDJ. Deux faits distincts dans la même vue : les
+        dépôts (mesures depots et montant_depots, par jour, sur environ 90 jours) et les joueurs par niveau (mesures
+        joueurs_rouges, joueurs_orange, joueurs_verts, joueurs_classes), qui ne portent que sur le DERNIER calcul de nuit : ne
+        jamais les ventiler par jour ni les comparer d'un jour à l'autre. Les niveaux sont des bandes de démonstration, non
+        réglementaires. Ne jamais mélanger dépôts et joueurs dans une même requête. Pour une courbe des dépôts, utiliser le
+        jour comme dimension de temps avec une granularité jour et une période absolue.
+      mf_history_months: 36
+      mf_temoin: {measure: depots, time_dimension: jour, date_range: last 30 days}
+      mf_fraicheur: {measure: depots, time_dimension: jour}
+
+    cubes:
+      - join_path: activite_jeu_base
+        includes: [depots, montant_depots, joueurs_classes, joueurs_rouges, joueurs_orange, joueurs_verts, jour, niveau]

@@ -1,0 +1,91 @@
+# Cube « activité de jeu » de la démonstration FDJ UNITED (dialecte Trino, source ext_lfdj.jeu_responsable) : la vue SQL
+# v_activite_jeu_jour (demos/fdj/simulation/70-vues-metricforge.sql) expose, SANS identifiant de joueur, les dépôts par jour
+# et la répartition des joueurs par niveau d'intensité de jeu. Pas de pré-agrégation : un creux (panne) se voit tout de suite.
+# DONNÉES ENTIÈREMENT SYNTHÉTIQUES, sans lien avec les chiffres réels de FDJ. Niveaux : bandes de démonstration, non réglementaires.
+cubes:
+  - name: activite_jeu_base
+    title: Activité de jeu par jour et niveau
+    description: "Un enregistrement par jour et par niveau : dépôts du jour (niveau aucun) et joueurs par niveau d'intensité vert, orange ou rouge (dernier calcul de nuit). Plomberie de la vue activite_jeu."
+    sql: >
+      SELECT
+        jour,
+        niveau,
+        depots,
+        montant_depots,
+        joueurs,
+        CAST(jour AS TIMESTAMP) AS debut_jour
+      FROM v_activite_jeu_jour
+    public: false
+
+    dimensions:
+      - name: cle
+        sql: "CONCAT(CAST({CUBE}.jour AS VARCHAR), '|', {CUBE}.niveau)"
+        type: string
+        primary_key: true
+        title: Jour et niveau
+        description: "Clé du grain : jour et niveau."
+
+      - name: jour
+        sql: debut_jour
+        type: time
+        title: Jour
+        description: "Jour civil, minuit UTC. Les dépôts existent chaque jour ; la répartition par niveau ne porte que sur le dernier calcul de nuit."
+
+      - name: niveau
+        sql: niveau
+        type: string
+        title: Niveau d'intensité de jeu
+        description: "Niveau d'intensité de jeu du joueur (bandes de démonstration, non réglementaires) : vert, orange ou rouge ; « aucun » pour les lignes de dépôts, qui ne portent pas de niveau."
+
+    measures:
+      - name: depots
+        sql: depots
+        type: sum
+        title: Dépôts
+        description: "Nombre de dépôts des joueurs sur leur compte de jeu."
+        meta:
+          favorable: hausse
+
+      - name: montant_depots
+        sql: montant_depots
+        type: sum
+        format: currency
+        title: Montant des dépôts
+        description: "Somme des montants déposés, en euros."
+        meta:
+          favorable: hausse
+          currency: EUR
+
+      - name: joueurs_classes
+        sql: joueurs
+        type: sum
+        title: Joueurs classés
+        description: "Nombre de joueurs classés par niveau d'intensité lors du dernier calcul de nuit (tous niveaux)."
+
+      - name: joueurs_rouges
+        sql: joueurs
+        type: sum
+        title: Joueurs au niveau rouge
+        description: "Nombre de joueurs au niveau rouge (intensité la plus élevée) lors du dernier calcul de nuit."
+        filters:
+          - sql: "{CUBE}.niveau = 'rouge'"
+        meta:
+          favorable: baisse
+
+      - name: joueurs_orange
+        sql: joueurs
+        type: sum
+        title: Joueurs au niveau orange
+        description: "Nombre de joueurs au niveau orange lors du dernier calcul de nuit."
+        filters:
+          - sql: "{CUBE}.niveau = 'orange'"
+        meta:
+          favorable: baisse
+
+      - name: joueurs_verts
+        sql: joueurs
+        type: sum
+        title: Joueurs au niveau vert
+        description: "Nombre de joueurs au niveau vert lors du dernier calcul de nuit."
+        filters:
+          - sql: "{CUBE}.niveau = 'vert'"
