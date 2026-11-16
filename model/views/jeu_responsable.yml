@@ -1,0 +1,34 @@
+views:
+  - name: jeu_responsable
+    title: Pilotage du jeu responsable
+    description: >
+      Vue métier du pilotage du jeu responsable sur des données SYNTHÉTIQUES (sans lien avec FDJ ; elle ne reproduit pas
+      l'algorithme de l'ANJ, seulement sa structure à cinq familles de scores) : joueurs suivis, joueurs à risque élevé,
+      scores moyens par famille, dépôts perdus, chasing, revues de prévention, part des décisions restrictives
+      précédées d'une revue humaine et délai de traitement, ventilables par période, marché, marque, produit, tranche
+      d'âge, bande de risque, type d'alerte et décision. L'identifiant du joueur est masqué aux groupes sans droit.
+    meta:
+      ai_context: >
+        Les données sont synthétiques et la vue ne reproduit pas l'algorithme de l'ANJ : le dire si on le demande.
+        Le score global vaut (10 x financier + fréquence + activité + modérateurs + 3 x comptes) / 10, par joueur et par
+        période de six mois (2025-S1, 2025-S2, 2026-S1) ; il va de 0 à 100. Les bandes de risque (faible < 20,
+        modérée 20 à 40, élevée 40 à 60, très élevée 60 et plus) sont de démonstration, non réglementaires. « Joueurs à
+        risque » désigne joueurs_risque_eleve (bandes élevée et très élevée) et « part à risque » part_risque_eleve : déjà
+        calculée, ne jamais la recalculer ni faire la moyenne de parts. Toujours préciser une période sur date_fin_periode
+        avec des dates absolues (2025-06-30, 2025-12-31 ou 2026-06-30) ou ventiler par periode : joueurs_suivis compte
+        les comptes distincts, un compte présent sur trois périodes compte une fois. Les scores moyens sont des moyennes
+        par joueur et par période. Ce sont des données de santé au sens de la CNIL : le joueur (identifiant) est un
+        identifiant opaque souvent masqué, ne jamais tenter de le retrouver ni de le croiser ; les alertes sont en termes
+        génériques. La part_decisions_restrictives_revues est un indicateur de contrôle et doit valoir 100 %. Les types
+        d'alerte, décisions et délais n'existent que pour les joueurs ayant reçu une revue (champs vides sinon).
+      mf_history_months: 36
+      mf_temoin: {measure: joueurs_suivis, time_dimension: date_fin_periode, date_range: last 12 months}
+      mf_fraicheur: {measure: joueurs_suivis, time_dimension: date_fin_periode}
+
+    cubes:
+      - join_path: joueurs_periode_base
+        includes: [joueurs_suivis, joueurs_risque_eleve, part_risque_eleve, score_global_moyen, score_financier_moyen,
+                   score_frequence_moyen, score_activite_moyen, score_moderateurs_moyen, score_comptes_moyen,
+                   depots_perdus_moyen, episodes_chasing, joueurs_revus, part_decisions_restrictives_revues,
+                   delai_moyen_jours, date_fin_periode, periode, marche, marque, produit_principal, tranche_age,
+                   bande_risque, joueur, type_alerte, decision, revue_humaine, role_relecteur]

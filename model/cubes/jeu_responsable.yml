@@ -1,0 +1,534 @@
+# Modèle « jeu responsable » de la démonstration FDJ UNITED, dialecte Trino : tables non qualifiées (catalogue et schéma
+# de la source de données de l'organisation), aucune condition de tenant. Conventions : dcp_metricforge/model/README.md.
+# Tables attendues dans la source : jr_joueurs, jr_scores_periode, jr_revues, jr_activite_mensuelle (CSV du lakehouse ou
+# PostgreSQL de démonstration, voir ../../../jeu-responsable-synthetique/).
+# DONNÉES ENTIÈREMENT SYNTHÉTIQUES, sans lien avec FDJ ; le jeu ne reproduit PAS l'algorithme de l'ANJ (décision
+# n°2026-118), seulement sa structure à cinq familles et ses pondérations publiques. Bandes de risque : démonstration.
+cubes:
+  - name: joueurs_periode_base
+    title: Joueurs par période de six mois
+    description: "Un enregistrement par joueur et par période de six mois : cinq sous-scores, score global, bande de risque, indicateurs bruts et revue de prévention éventuelle (plomberie de la vue jeu_responsable)."
+    # Grain : joueur x période (au plus une revue par joueur et période, donc la jointure ne multiplie pas les lignes).
+    # fin_periode : dernier jour du semestre, pour la dimension temporelle.
+    sql: >
+      SELECT
+        s.joueur_id,
+        s.periode,
+        s.score_financier,
+        s.score_frequence,
+        s.score_activite,
+        s.score_moderateurs,
+        s.score_comptes,
+        s.score_global,
+        s.bande_risque,
+        s.nb_depots,
+        s.depots_perdus,
+        s.episodes_chasing,
+        s.jours_actifs,
+        s.nb_autoexclusions,
+        j.marche,
+        j.marque,
+        j.tranche_age,
+        j.produit_principal,
+        r.date_revue,
+        r.type_alerte,
+        r.decision,
+        r.revue_humaine,
+        r.role_relecteur,
+        r.delai_jours,
+        CAST(CAST(CONCAT(substr(s.periode, 1, 4), CASE substr(s.periode, 6, 2) WHEN 'S1' THEN '-06-30' ELSE '-12-31' END) AS DATE) AS TIMESTAMP) AS fin_periode
+      FROM jr_scores_periode s
+      JOIN jr_joueurs j ON s.joueur_id = j.joueur_id
+      LEFT JOIN jr_revues r ON r.joueur_id = s.joueur_id AND r.periode = s.periode
+    public: false
+
+    dimensions:
+      - name: cle
+        sql: "CONCAT({CUBE}.joueur_id, '-', {CUBE}.periode)"
+        type: string
+        primary_key: true
+        title: Joueur et période
+        description: "Clé du grain : identifiant du joueur et période."
+
+      - name: date_fin_periode
+        sql: fin_periode
+        type: time
+        title: Fin de période
+        description: "Dernier jour de la période de six mois (30 juin ou 31 décembre), à minuit UTC."
+
+      - name: periode
+        sql: periode
+        type: string
+        title: Période
+        description: "Semestre de calcul des scores : 2025-S1, 2025-S2 ou 2026-S1."
+
+      - name: marche
+        sql: marche
+        type: string
+        title: Marché
+        description: "Marché du compte joueur : France, Royaume-Uni, Pays-Bas, Suède, Belgique, Roumanie ou Italie."
+        # Dimension filtrable (L14) : un filtre de ligne de SQL Policy sur jr_joueurs.marche s'applique ici ; il
+        # représente l'équipe d'un pays, qui ne voit que son marché.
+        meta:
+          mf_filtrable: true
+          mf_source_column: jr_joueurs.marche
+
+      - name: marque
+        sql: marque
+        type: string
+        title: Marque
+        description: "Marque de l'opérateur : Parions Sport en ligne et ZEturf (France), Unibet (tous marchés sauf la France), 32Red (Royaume-Uni)."
+
+      - name: produit_principal
+        sql: produit_principal
+        type: string
+        title: Produit principal
+        description: "Produit le plus joué par le compte : paris sportifs, loterie en ligne, poker, courses hippiques ou casino (le casino n'existe pas en France)."
+
+      - name: tranche_age
+        sql: tranche_age
+        type: string
+        title: Tranche d'âge
+        description: "Tranche d'âge du titulaire du compte : 18-24, 25-34, 35-49 ou 50+."
+
+      - name: bande_risque
+        sql: >
+          CASE bande_risque WHEN 'faible' THEN '1 faible' WHEN 'modérée' THEN '2 modérée'
+          WHEN 'élevée' THEN '3 élevée' ELSE '4 très élevée' END
+        type: string
+        title: Bande de risque
+        description: "Bande de risque de DÉMONSTRATION (non réglementaire) du score global, préfixée de son rang pour le tri : 1 faible (< 20), 2 modérée (20 à 40), 3 élevée (40 à 60), 4 très élevée (60 et plus)."
+
+      - name: joueur
+        sql: joueur_id
+        type: string
+        title: Joueur
+        description: "Identifiant opaque (pseudonyme) du compte joueur. Donnée de santé : toujours masqué pour un groupe sans droit."
+        # Masquage par groupe (MF-208) : valeur affichée quand le droit du groupe masque ce membre.
+        mask:
+          sql: "'•••'"
+
+      - name: type_alerte
+        sql: type_alerte
+        type: string
+        title: Type d'alerte
+        description: "Motif de la revue, en termes génériques (difficultés financières, jeu nocturne prolongé, multiplication des comptes, hausse soudaine de l'activité, assouplissement des limites de jeu) ; vide si le joueur n'a pas fait l'objet d'une revue."
+
+      - name: decision
+        sql: decision
+        type: string
+        title: Décision de prévention
+        description: "Décision prise après la revue : aucune action, contact de sensibilisation, proposition de limite ou auto-exclusion proposée ; vide sans revue. Les deux dernières sont les décisions restrictives."
+
+      - name: revue_humaine
+        sql: "CASE WHEN date_revue IS NULL THEN NULL WHEN revue_humaine THEN 'Oui' ELSE 'Non' END"
+        type: string
+        title: Revue humaine
+        description: "Oui si un relecteur humain a examiné le dossier avant la décision (obligatoire avant toute décision restrictive, article 22 du RGPD) ; vide sans revue."
+
+      - name: role_relecteur
+        sql: role_relecteur
+        type: string
+        title: Rôle du relecteur
+        description: "Rôle de la personne qui a traité la revue : conseiller prévention ou responsable jeu responsable ; vide sans revue."
+
+    measures:
+      - name: lignes
+        type: count
+        title: Joueurs-périodes
+        description: "Nombre d'enregistrements joueur x période. Membre technique (dénominateur des moyennes), non publié."
+
+      - name: joueurs_suivis
+        sql: joueur_id
+        type: count_distinct
+        title: Joueurs suivis
+        description: "Nombre de comptes joueurs distincts scorés sur la sélection (un compte compte une fois même sur plusieurs périodes)."
+
+      - name: joueurs_risque_eleve
+        sql: joueur_id
+        type: count_distinct
+        title: Joueurs à risque élevé ou très élevé
+        description: "Nombre de comptes distincts dont le score global est en bande élevée (40 à 60) ou très élevée (60 et plus), bandes de démonstration."
+        meta:
+          favorable: baisse
+        filters:
+          - sql: "{CUBE}.bande_risque IN ('élevée', 'très élevée')"
+
+      - name: part_risque_eleve
+        sql: "{joueurs_risque_eleve} / NULLIF({joueurs_suivis}, 0)"
+        type: number
+        format: percent
+        title: Part des joueurs à risque élevé
+        description: "Joueurs à risque élevé ou très élevé rapportés aux joueurs suivis de la même sélection (en fraction : 0,042 = 4,2 %). Déjà calculée : ne jamais la recalculer."
+        meta:
+          favorable: baisse
+
+      - name: score_global_somme
+        sql: score_global
+        type: sum
+        title: Somme des scores globaux
+        description: "Somme des scores globaux. Membre technique, non publié."
+
+      - name: score_financier_somme
+        sql: score_financier
+        type: sum
+        title: Somme des scores financiers
+        description: "Somme des scores financiers. Membre technique, non publié."
+
+      - name: score_frequence_somme
+        sql: score_frequence
+        type: sum
+        title: Somme des scores de fréquence
+        description: "Somme des scores de fréquence de jeu. Membre technique, non publié."
+
+      - name: score_activite_somme
+        sql: score_activite
+        type: sum
+        title: Somme des scores d'activité
+        description: "Somme des scores d'activité de jeu. Membre technique, non publié."
+
+      - name: score_moderateurs_somme
+        sql: score_moderateurs
+        type: sum
+        title: Somme des scores de modérateurs
+        description: "Somme des scores de modérateurs de jeu. Membre technique, non publié."
+
+      - name: score_comptes_somme
+        sql: score_comptes
+        type: sum
+        title: Somme des scores de gestion des comptes
+        description: "Somme des scores de gestion des comptes. Membre technique, non publié."
+
+      - name: score_global_moyen
+        sql: "{score_global_somme} / NULLIF({lignes}, 0)"
+        type: number
+        title: Score global moyen
+        description: "Moyenne du score global (10 x financier + fréquence + activité + modérateurs + 3 x comptes, divisé par 10 : de 0 à 100) sur les joueurs-périodes. Score de démonstration."
+        meta:
+          favorable: baisse
+
+      - name: score_financier_moyen
+        sql: "{score_financier_somme} / NULLIF({lignes}, 0)"
+        type: number
+        title: Score moyen, activité financière
+        description: "Moyenne du sous-score d'activité financière (dépôts, dépôts perdus, chasing, alimentations, retraits annulés), de 0 à 100. Pondéré 10 dans le score global."
+        meta:
+          favorable: baisse
+
+      - name: score_frequence_moyen
+        sql: "{score_frequence_somme} / NULLIF({lignes}, 0)"
+        type: number
+        title: Score moyen, fréquence de jeu
+        description: "Moyenne du sous-score de fréquence de jeu (créneaux horaires, jours d'activité), de 0 à 100. Pondéré 1."
+        meta:
+          favorable: baisse
+
+      - name: score_activite_moyen
+        sql: "{score_activite_somme} / NULLIF({lignes}, 0)"
+        type: number
+        title: Score moyen, activité de jeu
+        description: "Moyenne du sous-score d'activité de jeu (nombre de mises, variations, activités pratiquées), de 0 à 100. Pondéré 1."
+        meta:
+          favorable: baisse
+
+      - name: score_moderateurs_moyen
+        sql: "{score_moderateurs_somme} / NULLIF({lignes}, 0)"
+        type: number
+        title: Score moyen, modérateurs de jeu
+        description: "Moyenne du sous-score de modérateurs de jeu (modifications, hausses, amplitude des limites), de 0 à 100. Pondéré 1."
+        meta:
+          favorable: baisse
+
+      - name: score_comptes_moyen
+        sql: "{score_comptes_somme} / NULLIF({lignes}, 0)"
+        type: number
+        title: Score moyen, gestion des comptes
+        description: "Moyenne du sous-score de gestion des comptes (auto-exclusions, nombre de comptes), de 0 à 100. Pondéré 3."
+        meta:
+          favorable: baisse
+
+      - name: depots_perdus_somme
+        sql: depots_perdus
+        type: sum
+        format: currency
+        title: Somme des dépôts perdus
+        description: "Somme des dépôts perdus en euros. Membre technique, non publié."
+        meta:
+          currency: EUR
+
+      - name: depots_perdus_moyen
+        sql: "{depots_perdus_somme} / NULLIF({lignes}, 0)"
+        type: number
+        format: currency
+        title: Dépôts perdus moyens
+        description: "Dépôts perdus moyens par joueur et par période de six mois, en euros."
+        meta:
+          favorable: baisse
+          currency: EUR
+
+      - name: episodes_chasing
+        sql: episodes_chasing
+        type: sum
+        title: Épisodes de chasing
+        description: "Nombre d'épisodes de chasing (au moins trois dépôts consécutifs sur 24 heures) sur la sélection."
+        meta:
+          favorable: baisse
+
+      - name: joueurs_revus
+        sql: joueur_id
+        type: count_distinct
+        title: Joueurs ayant reçu une revue
+        description: "Nombre de comptes distincts ayant fait l'objet d'une revue de prévention (examen d'un dossier, décision loguée)."
+        filters:
+          - sql: "{CUBE}.date_revue IS NOT NULL"
+
+      - name: decisions_restrictives
+        type: count
+        title: Décisions restrictives
+        description: "Nombre de revues dont la décision est restrictive : proposition de limite ou auto-exclusion proposée. Membre technique, non publié."
+        filters:
+          - sql: "{CUBE}.decision IN ('proposition de limite', 'auto-exclusion proposée')"
+
+      - name: decisions_restrictives_revues
+        type: count
+        title: Décisions restrictives précédées d'une revue humaine
+        description: "Nombre de décisions restrictives pour lesquelles un relecteur humain a examiné le dossier. Membre technique, non publié."
+        filters:
+          - sql: "{CUBE}.decision IN ('proposition de limite', 'auto-exclusion proposée') AND {CUBE}.revue_humaine"
+
+      - name: part_decisions_restrictives_revues
+        sql: "{decisions_restrictives_revues} / NULLIF({decisions_restrictives}, 0)"
+        type: number
+        format: percent
+        title: Décisions restrictives précédées d'une revue humaine
+        description: "Part des décisions restrictives (proposition de limite, auto-exclusion proposée) précédées d'une revue humaine. Indicateur de contrôle : doit valoir 100 % (article 22 du RGPD, supervision humaine réelle)."
+        meta:
+          favorable: hausse
+
+      - name: revues_lignes
+        type: count
+        title: Revues
+        description: "Nombre de revues de prévention. Membre technique (dénominateur du délai), non publié."
+        filters:
+          - sql: "{CUBE}.date_revue IS NOT NULL"
+
+      - name: delai_somme
+        sql: delai_jours
+        type: sum
+        title: Somme des délais de traitement
+        description: "Somme des délais de traitement en jours. Membre technique, non publié."
+
+      - name: delai_moyen_jours
+        sql: "{delai_somme} / NULLIF({revues_lignes}, 0)"
+        type: number
+        title: Délai moyen de traitement
+        description: "Délai moyen, en jours, entre la fin de la période et la revue du dossier."
+        meta:
+          favorable: baisse
+
+    # Pré-agrégations. Le jeu est petit (environ 460 000 joueurs-périodes) mais les pré-agrégations montrent le
+    # raisonnement : une pré-agrégation ADDITIVE à toutes les dimensions de ventilation (sommes et comptes : tout sous-
+    # ensemble de dimensions s'en déduit) et des pré-agrégations pour les mesures count_distinct, qui ne se recomposent
+    # pas et exigent la correspondance exacte des dimensions (une par écran du tableau de bord). Partitions annuelles :
+    # les dates de fin de période tiennent en deux partitions.
+    pre_aggregations:
+      - name: additives
+        measures: [lignes, score_global_somme, score_financier_somme, score_frequence_somme, score_activite_somme,
+                   score_moderateurs_somme, score_comptes_somme, depots_perdus_somme, episodes_chasing,
+                   decisions_restrictives, decisions_restrictives_revues, revues_lignes, delai_somme]
+        dimensions: [periode, marche, marque, produit_principal, tranche_age, bande_risque, type_alerte, decision]
+        time_dimension: date_fin_periode
+        granularity: day
+        partition_granularity: year
+        refresh_key:
+          every: 10 minute
+          sql: SELECT count(*) FROM jr_scores_periode
+        build_range_start:
+          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+        build_range_end:
+          sql: SELECT CAST(NOW() AS TIMESTAMP)
+
+      - name: distincts_global
+        measures: [joueurs_suivis, joueurs_risque_eleve, joueurs_revus]
+        time_dimension: date_fin_periode
+        granularity: day
+        partition_granularity: year
+        refresh_key:
+          every: 10 minute
+          sql: SELECT count(*) FROM jr_scores_periode
+        build_range_start:
+          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+        build_range_end:
+          sql: SELECT CAST(NOW() AS TIMESTAMP)
+
+      - name: distincts_periode
+        measures: [joueurs_suivis, joueurs_risque_eleve, joueurs_revus]
+        dimensions: [periode]
+        time_dimension: date_fin_periode
+        granularity: day
+        partition_granularity: year
+        refresh_key:
+          every: 10 minute
+          sql: SELECT count(*) FROM jr_scores_periode
+        build_range_start:
+          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+        build_range_end:
+          sql: SELECT CAST(NOW() AS TIMESTAMP)
+
+      - name: distincts_marche
+        measures: [joueurs_suivis, joueurs_risque_eleve, joueurs_revus]
+        dimensions: [marche]
+        time_dimension: date_fin_periode
+        granularity: day
+        partition_granularity: year
+        refresh_key:
+          every: 10 minute
+          sql: SELECT count(*) FROM jr_scores_periode
+        build_range_start:
+          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+        build_range_end:
+          sql: SELECT CAST(NOW() AS TIMESTAMP)
+
+      - name: distincts_marque_bande
+        measures: [joueurs_suivis, joueurs_risque_eleve, joueurs_revus]
+        dimensions: [marque, bande_risque]
+        time_dimension: date_fin_periode
+        granularity: day
+        partition_granularity: year
+        refresh_key:
+          every: 10 minute
+          sql: SELECT count(*) FROM jr_scores_periode
+        build_range_start:
+          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+        build_range_end:
+          sql: SELECT CAST(NOW() AS TIMESTAMP)
+
+      - name: distincts_marche_age
+        measures: [joueurs_suivis, joueurs_risque_eleve, joueurs_revus]
+        dimensions: [marche, tranche_age]
+        time_dimension: date_fin_periode
+        granularity: day
+        partition_granularity: year
+        refresh_key:
+          every: 10 minute
+          sql: SELECT count(*) FROM jr_scores_periode
+        build_range_start:
+          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+        build_range_end:
+          sql: SELECT CAST(NOW() AS TIMESTAMP)
+
+      - name: distincts_alerte_decision
+        measures: [joueurs_suivis, joueurs_risque_eleve, joueurs_revus]
+        dimensions: [type_alerte, decision]
+        time_dimension: date_fin_periode
+        granularity: day
+        partition_granularity: year
+        refresh_key:
+          every: 10 minute
+          sql: SELECT count(*) FROM jr_scores_periode
+        build_range_start:
+          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+        build_range_end:
+          sql: SELECT CAST(NOW() AS TIMESTAMP)
+
+  - name: activite_marches_base
+    title: Activité mensuelle par marché
+    description: "Mises, produit brut des jeux et joueurs actifs par mois, marché, marque et produit (plomberie de la vue groupe_marches)."
+    sql: >
+      SELECT
+        mois,
+        marche,
+        marque,
+        produit,
+        mises_eur,
+        pbj_eur,
+        joueurs_actifs,
+        CAST(CAST(CONCAT(mois, '-01') AS DATE) AS TIMESTAMP) AS debut_mois
+      FROM jr_activite_mensuelle
+    public: false
+
+    dimensions:
+      - name: cle
+        sql: "CONCAT({CUBE}.mois, '|', {CUBE}.marche, '|', {CUBE}.marque, '|', {CUBE}.produit)"
+        type: string
+        primary_key: true
+        title: Mois, marché, marque et produit
+        description: "Clé du grain."
+
+      - name: mois
+        sql: debut_mois
+        type: time
+        title: Mois
+        description: "Mois civil, premier jour du mois à minuit UTC."
+
+      - name: marche
+        sql: marche
+        type: string
+        title: Marché
+        description: "Marché : France, Royaume-Uni, Pays-Bas, Suède, Belgique, Roumanie ou Italie."
+        meta:
+          mf_filtrable: true
+          mf_source_column: jr_activite_mensuelle.marche
+
+      - name: marque
+        sql: marque
+        type: string
+        title: Marque
+        description: "Marque de l'opérateur : Parions Sport en ligne et ZEturf (France), Unibet (hors France), 32Red (Royaume-Uni)."
+
+      - name: produit
+        sql: produit
+        type: string
+        title: Produit
+        description: "Produit : paris sportifs, loterie en ligne, poker, courses hippiques ou casino."
+
+    measures:
+      - name: mises
+        sql: mises_eur
+        type: sum
+        format: currency
+        title: Mises
+        description: "Somme des mises en euros."
+        meta:
+          favorable: hausse
+          currency: EUR
+
+      - name: pbj
+        sql: pbj_eur
+        type: sum
+        format: currency
+        title: Produit brut des jeux
+        description: "Somme du produit brut des jeux (PBJ : mises moins gains) en euros."
+        meta:
+          favorable: hausse
+          currency: EUR
+
+      - name: joueurs_actifs
+        sql: joueurs_actifs
+        type: sum
+        title: Joueurs actifs
+        description: "Somme des joueurs actifs de chaque mois. Pour un mois, c'est le nombre de joueurs actifs ; sur plusieurs mois, ce sont des joueurs-mois (un joueur actif tous les mois compte autant de fois), pas des joueurs distincts."
+        meta:
+          favorable: hausse
+
+      - name: taux_pbj
+        sql: "{pbj} / NULLIF({mises}, 0)"
+        type: number
+        format: percent
+        title: Taux de PBJ
+        description: "Produit brut des jeux rapporté aux mises (en fraction : 0,08 = 8 %). Déjà calculé : ne jamais le recalculer."
+
+    pre_aggregations:
+      - name: main
+        measures: [mises, pbj, joueurs_actifs]
+        dimensions: [marche, marque, produit]
+        time_dimension: mois
+        granularity: month
+        partition_granularity: year
+        refresh_key:
+          every: 10 minute
+          sql: SELECT count(*) FROM jr_activite_mensuelle
+        build_range_start:
+          sql: SELECT CAST(NOW() - interval '36' month AS TIMESTAMP)
+        build_range_end:
+          sql: SELECT CAST(NOW() AS TIMESTAMP)

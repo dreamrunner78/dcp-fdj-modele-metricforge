@@ -1,0 +1,22 @@
+views:
+  - name: groupe_marches
+    title: Vue groupe multi-marchés
+    description: >
+      Vue métier de l'activité du groupe sur des données SYNTHÉTIQUES (sans lien avec les chiffres réels de FDJ) : mises,
+      produit brut des jeux (PBJ), joueurs actifs et taux de PBJ, ventilables par mois, marché, marque et produit
+      (montants en euros, de janvier 2025 à juin 2026).
+    meta:
+      ai_context: >
+        Données synthétiques : ne pas les présenter comme des chiffres de FDJ. Les montants sont en euros. « Chiffre
+        d'affaires » n'existe pas ici : utiliser mises (volume joué) et pbj (produit brut des jeux). Le taux de PBJ est
+        déjà calculé : ne jamais le recalculer ni faire la moyenne de taux. Les joueurs actifs sont mensuels : pour un
+        mois c'est le nombre de joueurs actifs, sur plusieurs mois c'est une somme de joueurs-mois, pas des joueurs
+        distincts. Les données couvrent de janvier 2025 à juin 2026 : toujours une période absolue sur mois. Le
+        casino en ligne n'existe pas en France.
+      mf_history_months: 36
+      mf_temoin: {measure: mises, time_dimension: mois, date_range: last 12 months}
+      mf_fraicheur: {measure: mises, time_dimension: mois}
+
+    cubes:
+      - join_path: activite_marches_base
+        includes: [mises, pbj, joueurs_actifs, taux_pbj, mois, marche, marque, produit]

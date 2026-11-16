@@ -1,0 +1,33 @@
+views:
+  - name: marche_jeux_en_ligne
+    title: Marché français des jeux en ligne (ANJ)
+    description: >
+      Vue métier du marché français des jeux d'argent en ligne régulé (paris sportifs, paris hippiques, poker), d'après
+      les agrégats annuels publiés par l'ANJ de 2010 à 2024 : mises, produit brut des jeux, comptes joueurs actifs, taux
+      de retour aux joueurs, mise moyenne par compte et croissance des mises, par année et par segment. Aucun joueur et
+      aucun opérateur nommé ; le réseau physique (points de vente) n'est pas dans ces chiffres.
+    meta:
+      ai_context: >
+        Source : ANJ, jeu data.gouv.fr « Données sur le marché des jeux en ligne », agrégats ANNUELS de 2010 à 2024 (une
+        valeur par année et par segment) : toujours une plage de dates explicite entre 2010-01-01 et 2024-12-31 (« last
+        12 months » ne renvoie rien) et la granularité année. Les mises et le PBJ sont en millions d'euros. Le PBJ
+        (produit brut des jeux) est égal aux mises moins les gains reversés aux joueurs : c'est le revenu des
+        opérateurs, pas leur bénéfice. Les mises n'existent que pour les paris sportifs et les paris hippiques (le
+        fichier n'en donne pas pour le poker). « Comptes joueurs actifs » est le total de marché en milliers : ne
+        JAMAIS additionner les comptes par segment (comptes_actifs_segment) pour obtenir le total, un joueur pouvant
+        jouer à plusieurs jeux. Le segment « Tous segments » ne porte que le total des comptes, les joueurs uniques
+        (depuis 2018) et le budget marketing (depuis 2017) : l'exclure (filtre segment différent de « Tous segments »)
+        pour une répartition par segment des mises ou du PBJ. Le taux de retour aux joueurs, la mise annuelle moyenne
+        par compte et la croissance annuelle des mises sont déjà calculés : ne jamais les recalculer ni en faire la
+        moyenne. La croissance exige la granularité année et une plage qui inclut l'année précédente. Ce sont des
+        agrégats de marché, hors réseau physique des opérateurs (pas de chiffres FDJ en point de vente).
+      # 240 mois = 20 ans : de novembre 2006 à aujourd'hui couvre les données (2010-2024).
+      mf_history_months: 240
+      # Exploitation (MFN-62a) : plage relative imposée par la sonde ; vide ici (données annuelles jusqu'en 2024).
+      mf_temoin: {measure: mises, time_dimension: annee, date_range: last 12 months}
+      mf_fraicheur: {measure: mises, time_dimension: annee}
+
+    cubes:
+      - join_path: marche_jeux_base
+        includes: [mises, pbj, comptes_actifs, comptes_actifs_segment, joueurs_uniques, budget_marketing,
+                   taux_retour_joueurs, mise_moyenne_par_compte, croissance_mises, annee, segment]

@@ -1,0 +1,170 @@
+# Modèle « Marché des jeux en ligne » (ANJ, data.gouv.fr, agrégats annuels 2010-2024), dialecte Trino : tables non
+# qualifiées (catalogue et schéma de la source de données de l'organisation), aucune condition de tenant.
+# Conventions : dcp_metricforge/model/README.md. Tables attendues (CSV du lakehouse ou PostgreSQL de démonstration,
+# voir ../../../donnees-anj/) : anj_segment_annee et anj_marche_annee.
+#
+# Pas de pré-agrégation, volontairement : la source ne contient que 45 lignes de segment et 15 lignes de marché
+# (une par année). Trino répond en quelques dizaines de millisecondes ; Cube Store n'apporterait que de la
+# complexité (partitions, jobs de construction, risque de réponses vides tant qu'elles ne sont pas construites).
+#
+# Une ligne de base par (année, segment) + une ligne « tous_segments » par année qui porte les totaux de marché
+# (comptes actifs, joueurs uniques, budget marketing). Raison : les comptes joueurs actifs NE S'ADDITIONNENT PAS entre
+# segments (un joueur peut jouer à plusieurs jeux : 5 698 000 comptes au total en 2024 pour 7 661 000 en sommant les
+# segments). Le total est donc lu dans le fichier source, jamais recalculé. Mises et PBJ ne sont renseignés que sur les
+# lignes de segment : aucune double comptabilisation possible.
+cubes:
+  - name: marche_jeux_base
+    title: Marché des jeux en ligne
+    description: "Agrégats annuels du marché français des jeux en ligne (plomberie de la vue marche_jeux_en_ligne)."
+    sql: >
+      SELECT annee, date_fin_annee, segment, 'segment' AS niveau, mises_meur, pbj_meur,
+             comptes_actifs_milliers, agrements,
+             CAST(NULL AS DOUBLE) AS joueurs_uniques_milliers, CAST(NULL AS DOUBLE) AS budget_marketing_meur
+      FROM anj_segment_annee
+      UNION ALL
+      SELECT annee, date_fin_annee, 'tous_segments' AS segment, 'total' AS niveau,
+             CAST(NULL AS DOUBLE) AS mises_meur, CAST(NULL AS DOUBLE) AS pbj_meur,
+             comptes_actifs_total_milliers AS comptes_actifs_milliers, agrements_total AS agrements,
+             joueurs_uniques_milliers, budget_marketing_meur
+      FROM anj_marche_annee
+    public: false
+
+    dimensions:
+      - name: cle
+        sql: "CONCAT(CAST(annee AS VARCHAR), '|', segment)"
+        type: string
+        primary_key: true
+        title: Clé année et segment
+        description: "Identifiant technique d'une ligne (année et segment)."
+
+      - name: annee
+        sql: "CAST(date_fin_annee AS TIMESTAMP)"
+        type: time
+        title: Année
+        description: "Année du chiffre, repérée par sa date de fin (31 décembre). Les indicateurs sont des stocks ou des cumuls annuels : utiliser la granularité année."
+
+      - name: segment
+        sql: >
+          CASE segment WHEN 'paris_sportifs' THEN 'Paris sportifs' WHEN 'paris_hippiques' THEN 'Paris hippiques'
+          WHEN 'poker' THEN 'Poker' ELSE 'Tous segments' END
+        type: string
+        title: Segment
+        description: "Paris sportifs, paris hippiques ou poker ; « Tous segments » porte uniquement les totaux de marché (comptes actifs totaux, joueurs uniques, budget marketing) et n'a ni mises ni PBJ."
+
+    measures:
+      - name: mises
+        sql: mises_meur
+        type: sum
+        format: number
+        title: Mises
+        description: "Montant total misé par les joueurs, en millions d'euros (paris sportifs et paris hippiques ; le fichier ne donne pas les mises du poker)."
+        meta:
+          favorable: hausse
+
+      - name: pbj
+        sql: pbj_meur
+        type: sum
+        format: number
+        title: Produit brut des jeux (PBJ)
+        description: "Produit brut des jeux en millions d'euros : mises moins gains reversés aux joueurs. C'est le revenu des opérateurs agréés, avant impôts et frais, tous segments confondus si aucun segment n'est demandé."
+        meta:
+          favorable: hausse
+
+      # Mesure interne (non publiée) : PBJ des seuls segments qui ont des mises, pour que le taux de retour n'inclue pas le poker.
+      - name: pbj_avec_mises
+        sql: pbj_meur
+        type: sum
+        title: PBJ des segments avec mises
+        description: "PBJ des segments dont les mises sont connues (paris sportifs et hippiques). Usage interne du taux de retour aux joueurs."
+        public: false
+        filters:
+          - sql: "{CUBE}.mises_meur IS NOT NULL"
+
+      - name: comptes_actifs
+        sql: comptes_actifs_milliers
+        type: sum
+        format: number
+        title: Comptes joueurs actifs
+        description: "Nombre de comptes joueurs actifs en fin d'année, tous segments, en milliers (un joueur peut avoir plusieurs comptes et jouer à plusieurs jeux). Valeur du fichier source, non recalculée."
+        meta:
+          favorable: hausse
+        filters:
+          - sql: "{CUBE}.niveau = 'total'"
+
+      - name: comptes_actifs_segment
+        sql: comptes_actifs_milliers
+        type: sum
+        format: number
+        title: Comptes joueurs actifs du segment
+        description: "Comptes joueurs actifs en fin d'année par segment, en milliers. NON additifs d'un segment à l'autre : ne jamais les additionner pour obtenir le total (utiliser « Comptes joueurs actifs »)."
+        meta:
+          favorable: hausse
+        filters:
+          - sql: "{CUBE}.niveau = 'segment'"
+
+      # Mesure interne (non publiée) : comptes des seuls segments avec mises, dénominateur de la mise moyenne.
+      - name: comptes_segments_avec_mises
+        sql: comptes_actifs_milliers
+        type: sum
+        title: Comptes des segments avec mises
+        description: "Comptes actifs des segments dont les mises sont connues. Usage interne de la mise annuelle moyenne par compte."
+        public: false
+        filters:
+          - sql: "{CUBE}.niveau = 'segment' AND {CUBE}.mises_meur IS NOT NULL"
+
+      - name: joueurs_uniques
+        sql: joueurs_uniques_milliers
+        type: sum
+        format: number
+        title: Joueurs uniques
+        description: "Nombre de joueurs distincts, tous segments, en milliers (disponible depuis 2018)."
+        meta:
+          favorable: hausse
+
+      - name: budget_marketing
+        sql: budget_marketing_meur
+        type: sum
+        format: number
+        title: Budget marketing médias
+        description: "Budget marketing dans les médias des opérateurs, en millions d'euros (disponible depuis 2017)."
+
+      - name: taux_retour_joueurs
+        sql: "1 - {pbj_avec_mises} / NULLIF({mises}, 0)"
+        type: number
+        format: percent
+        title: Taux de retour aux joueurs
+        description: "Part des mises reversée aux joueurs en gains : 1 moins PBJ divisé par les mises (en fraction : 0,829 = 82,9 %). Calculé sur les paris sportifs et hippiques ; vide pour le poker et pour « Tous segments ». Déjà calculé : ne jamais le recalculer. Sans sens favorable univoque (bon pour le joueur, moins bon pour le revenu de l'opérateur)."
+
+      - name: mise_moyenne_par_compte
+        sql: "{mises} * 1000 / NULLIF({comptes_segments_avec_mises}, 0)"
+        type: number
+        format: currency
+        title: Mise annuelle moyenne par compte actif
+        description: "Mises de l'année divisées par les comptes actifs, en euros par compte (mises en M€ x 1000 / comptes en milliers). Calculée sur les paris sportifs et hippiques ; à lire par segment (sans segment, les comptes des deux segments sont additionnés et un joueur peut compter deux fois). Vide pour le poker. Déjà calculée : ne jamais la recalculer."
+        meta:
+          currency: EUR
+
+      # Croissance annuelle : mises de l'année / mises de l'année précédente - 1. Exige la granularité année avec
+      # la plage de dates qui inclut l'année N-1 (sinon vide pour la première année), comme flux_net_n1 du modèle d'exemple.
+      - name: mises_n1
+        multi_stage: true
+        sql: "{mises}"
+        type: number
+        format: number
+        title: Mises N-1
+        description: "Mises de l'année précédente, en millions d'euros. Exige la granularité année sur Année."
+        public: false
+        time_shift:
+          - time_dimension: annee
+            interval: 1 year
+            type: prior
+
+      - name: croissance_mises
+        multi_stage: true
+        sql: "{mises} / NULLIF({mises_n1}, 0) - 1"
+        type: number
+        format: percent
+        title: Croissance annuelle des mises
+        description: "Évolution des mises par rapport à l'année précédente (en fraction : 0,211 = +21,1 %). Exige la granularité année sur Année et une plage qui inclut l'année précédente ; vide pour la première année demandée. Déjà calculée : ne jamais la recalculer."
+        meta:
+          favorable: hausse
