@@ -1,0 +1,89 @@
+# Cube « réseau de points de vente » de la démonstration FDJ UNITED (dialecte Trino, source ext_lfdj.jeu_responsable) : la vue SQL
+# v_ventes_pdv_jour (demos/fdj/simulation/72-vues-metricforge-pdv.sql) expose les ventes du réseau physique par point, jour et famille
+# de jeux, avec la région et l'enseigne. Pas de pré-agrégation : une panne de remontée se voit tout de suite.
+# DONNÉES ENTIÈREMENT SYNTHÉTIQUES, sans lien avec les chiffres réels de FDJ ; aucune donnée personnelle.
+cubes:
+  - name: ventes_pdv_base
+    title: Ventes des points de vente par jour
+    description: "Une ligne par point de vente, jour et famille de jeux : mises et tickets, avec la région et l'enseigne du point (plomberie de la vue reseau_pdv)."
+    sql: >
+      SELECT
+        jour,
+        pdv_id,
+        region_code,
+        region,
+        type_enseigne,
+        famille_jeux,
+        mises_eur,
+        nb_tickets,
+        CAST(jour AS TIMESTAMP) AS debut_jour
+      FROM v_ventes_pdv_jour
+    public: false
+
+    dimensions:
+      - name: cle
+        sql: "CONCAT(CAST({CUBE}.jour AS VARCHAR), '|', {CUBE}.pdv_id, '|', {CUBE}.famille_jeux)"
+        type: string
+        primary_key: true
+        title: Jour, point de vente et famille de jeux
+        description: "Clé du grain."
+
+      - name: jour
+        sql: debut_jour
+        type: time
+        title: Jour
+        description: "Jour civil de la vente, minuit UTC."
+
+      - name: region_code
+        sql: region_code
+        type: string
+        title: Région (code)
+        description: "Code de la région du point de vente : ARA, BFC, BRE, COR, CVL, GES, HDF, IDF, NAQ, NOR, OCC, PAC ou PDL."
+        meta:
+          mf_filtrable: true
+          mf_source_column: v_ventes_pdv_jour.region_code
+
+      - name: region
+        sql: region
+        type: string
+        title: Région
+        description: "Nom de la région du point de vente (13 régions, dont la Corse)."
+
+      - name: type_enseigne
+        sql: type_enseigne
+        type: string
+        title: Type d'enseigne
+        description: "Type d'enseigne du point de vente : tabac-presse, bar-tabac, supermarché ou kiosque."
+
+      - name: famille_jeux
+        sql: famille_jeux
+        type: string
+        title: Famille de jeux
+        description: "Famille de jeux vendue : tirage, grattage ou paris sportifs."
+
+    measures:
+      - name: mises
+        sql: mises_eur
+        type: sum
+        format: currency
+        title: Mises
+        description: "Somme des mises en euros dans le réseau de points de vente."
+        meta:
+          favorable: hausse
+          currency: EUR
+
+      - name: tickets
+        sql: nb_tickets
+        type: sum
+        title: Tickets
+        description: "Nombre de tickets vendus."
+        meta:
+          favorable: hausse
+
+      - name: points_actifs
+        sql: pdv_id
+        type: count_distinct
+        title: Points ayant vendu
+        description: "Nombre de points de vente distincts ayant remonté des ventes sur la sélection : sur un jour, c'est le nombre de points qui ont remonté ce jour-là ; un creux signale une remontée manquante."
+        meta:
+          favorable: hausse

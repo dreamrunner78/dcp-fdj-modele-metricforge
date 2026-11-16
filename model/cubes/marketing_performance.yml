@@ -1,0 +1,107 @@
+# Cube « marketing » de la démonstration FDJ UNITED (dialecte Trino, source ext_lfdj.jeu_responsable) : la vue SQL v_marketing_campagnes
+# (demos/fdj/simulation/74-vues-metricforge-marketing.sql) expose, par campagne et SANS pseudonyme, les groupes traité et contrôle, les
+# conversions attribuées, celles du groupe contrôle et les conversions incrémentales.
+# DONNÉES ENTIÈREMENT SYNTHÉTIQUES : l'effet mesuré est celui du générateur, pas celui d'un opérateur.
+cubes:
+  - name: campagnes_base
+    title: Campagnes marketing
+    description: "Une ligne par campagne : taille des groupes traité et contrôle, conversions attribuées, conversions du groupe contrôle et conversions incrémentales (plomberie de la vue marketing_performance)."
+    sql: >
+      SELECT
+        campagne_id,
+        campagne,
+        canal,
+        famille_jeux,
+        type_offre,
+        traites,
+        controles,
+        conversions_attribuees,
+        depots_attribues,
+        conversions_controle,
+        conversions_incrementales,
+        CAST(date_debut AS TIMESTAMP) AS debut
+      FROM v_marketing_campagnes
+    public: false
+
+    dimensions:
+      - name: cle
+        sql: campagne_id
+        type: string
+        primary_key: true
+        title: Campagne (identifiant)
+        description: "Identifiant de la campagne : clé du grain."
+
+      - name: debut
+        sql: debut
+        type: time
+        title: Début de la campagne
+        description: "Date de début de la campagne, minuit UTC."
+
+      - name: campagne
+        sql: campagne
+        type: string
+        title: Campagne
+        description: "Nom de la campagne."
+
+      - name: canal
+        sql: canal
+        type: string
+        title: Canal
+        description: "Canal de la campagne : e-mail, SMS, courrier ou téléphone."
+
+      - name: famille_jeux
+        sql: famille_jeux
+        type: string
+        title: Famille de jeux
+        description: "Famille de jeux promue par la campagne."
+
+      - name: type_offre
+        sql: type_offre
+        type: string
+        title: Type d'offre
+        description: "Type d'offre de la campagne."
+
+    measures:
+      - name: traites
+        sql: traites
+        type: sum
+        title: Joueurs du groupe traité
+        description: "Nombre de joueurs sollicités par les campagnes sélectionnées (groupe traité)."
+
+      - name: controles
+        sql: controles
+        type: sum
+        title: Joueurs du groupe contrôle
+        description: "Nombre de joueurs volontairement non sollicités (groupe contrôle), pour mesurer ce qui se serait passé sans campagne."
+
+      - name: conversions_attribuees
+        sql: conversions_attribuees
+        type: sum
+        title: Conversions attribuées
+        description: "Dépôts rattachés à un envoi de campagne, c'est-à-dire tous les dépôts qui suivent un envoi, qu'ils aient été provoqués par lui ou non. Ce chiffre SURESTIME l'effet de la campagne : voir les conversions incrémentales."
+        meta:
+          favorable: hausse
+
+      - name: conversions_controle
+        sql: conversions_controle
+        type: sum
+        title: Conversions du groupe contrôle
+        description: "Dépôts de joueurs du groupe contrôle, qui n'ont reçu aucun envoi : ce qui se serait produit sans campagne."
+
+      - name: conversions_incrementales
+        sql: conversions_incrementales
+        type: sum
+        title: Conversions incrémentales
+        description: "Conversions attribuées moins celles que le taux du groupe contrôle aurait données sans campagne (traités x conversions du contrôle / taille du contrôle). Seul chiffre qui mesure l'effet des campagnes ; ordre de grandeur de démonstration, à présenter avec prudence."
+        meta:
+          favorable: hausse
+
+      - name: depots_attribues
+        sql: depots_attribues
+        type: sum
+        format: currency
+        title: Dépôts attribués
+        description: "Somme des dépôts rattachés à un envoi de campagne, en euros (attribution simple : surestime l'effet)."
+        meta:
+          favorable: hausse
+          currency: EUR

@@ -1,0 +1,21 @@
+views:
+  - name: reseau_pdv
+    title: Réseau de points de vente
+    description: >
+      Vue métier du réseau physique de points de vente sur des données SYNTHÉTIQUES (sans lien avec les chiffres réels de FDJ) :
+      mises, tickets et points ayant vendu, par jour, région, enseigne et famille de jeux. Un jour où des points ne remontent
+      pas se voit dans le nombre de points ayant vendu. Aucune donnée personnelle.
+    meta:
+      ai_context: >
+        Données synthétiques : ne pas les présenter comme des chiffres de FDJ. Les mises sont en euros. Les points ayant
+        vendu sont des points DISTINCTS : sur plusieurs jours c'est le nombre de points distincts, pas une somme de points
+        par jour ; pour suivre la remontée du réseau, demander les points ayant vendu PAR JOUR (dimension de temps jour,
+        granularité jour). Le filtre de région est un filtre de ligne imposé par SQL Policy : ne jamais tenter de le
+        contourner. Les données couvrent environ trois mois jusqu'à hier : toujours une période absolue ou « last N days ».
+      mf_history_months: 36
+      mf_temoin: {measure: mises, time_dimension: jour, date_range: last 30 days}
+      mf_fraicheur: {measure: mises, time_dimension: jour}
+
+    cubes:
+      - join_path: ventes_pdv_base
+        includes: [mises, tickets, points_actifs, jour, region_code, region, type_enseigne, famille_jeux]

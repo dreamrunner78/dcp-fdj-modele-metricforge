@@ -1,0 +1,21 @@
+views:
+  - name: marketing_performance
+    title: "Marketing : performance et incrémentalité"
+    description: >
+      Vue métier des campagnes marketing sur des données SYNTHÉTIQUES (sans lien avec les chiffres réels de FDJ) : joueurs traités et
+      groupe contrôle, conversions attribuées (tout dépôt qui suit un envoi), conversions du groupe contrôle et conversions
+      incrémentales (ce que la campagne apporte en plus). Aucun pseudonyme : des comptages par campagne.
+    meta:
+      ai_context: >
+        Données synthétiques : l'effet mesuré est celui du générateur, jamais celui d'un opérateur réel. Deux chiffres, deux
+        noms : les conversions ATTRIBUÉES comptent tout dépôt qui suit un envoi et surestiment l'effet ; les conversions
+        INCRÉMENTALES retranchent ce que le groupe contrôle (non sollicité) aurait fait sans campagne. Ne jamais présenter les
+        attribuées comme l'effet de la campagne. Ne jamais calculer de pourcentage à partir de ces mesures sans le dire.
+        Les campagnes vont d'août à novembre 2026 : toujours une période sur le début de campagne.
+      mf_history_months: 36
+      mf_temoin: {measure: conversions_attribuees, time_dimension: debut, date_range: last 12 months}
+      mf_fraicheur: {measure: conversions_attribuees, time_dimension: debut}
+
+    cubes:
+      - join_path: campagnes_base
+        includes: [traites, controles, conversions_attribuees, conversions_controle, conversions_incrementales, depots_attribues, debut, campagne, canal, famille_jeux, type_offre]
